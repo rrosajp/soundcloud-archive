@@ -805,7 +805,7 @@ def get_account_name(link):
     return x["user"]["permalink"]   
 
 def download(link):
-    folder_name = get_account_name(link)
+    folder_name = repairFilename(get_account_name(link))
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
         os.chdir(folder_name)
