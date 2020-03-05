@@ -843,18 +843,15 @@ def main():
             downloaded_links = []
         dl_file.close()
 
-        print("Number of accounts {}".format(len(accounts['accounts'])))
+        print("Number of accounts: {}".format(len(accounts['accounts'])))
         for acc in accounts['accounts']:
             data['{}'.format(acc['name'])] = []
             print('{}'.format(acc['name']))
-            #print
             account_tracks = get_tracks_account(acc['account'])
             for i in account_tracks:
                     data['{}'.format(acc["name"])].append(i)
                     links.append(i)
-        #print(links)
         for i in links:
-            #print(i)
             if i not in downloaded_links:
                 try:
                     download(i)
