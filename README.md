@@ -13,15 +13,14 @@ python3 archive.py
 ```
 
 ## Usage
-```
 manage_accounts.py
-
+```
 Usage: python3 manage_accounts.py <0|1>
 0 = Enter accounts manually
 1 = Add all accounts followed by a certain user
-
+```
 archive.py
-
+```
 usage: python3 archive.py [-h] [-m] [-dd] [--debug] [-s SEGMENTS]
 
 optional arguments:
