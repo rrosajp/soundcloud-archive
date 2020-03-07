@@ -44,7 +44,6 @@ debugFlag = False
 resumeDownloadFlag = False
 premiumClientId = "GSTMg2qyKgq8Ou9wvJfkxb3jk1ONIzvy"
 premiumFlag = True
-#ffmpegPath = "ffmpeg"
 metadataFlag = 0
 descriptionDisableFlag = 0
 segmentsParallel = 16
@@ -68,40 +67,6 @@ log_debug(f"appVersion = {appVersion}")
 def removeReadonly(func, path, _):
     os.chmod(path, stat.S_IWRITE)
     func(path)
-
-def linkDetection(soundcloudUrl):
-    '''
-    detects the type of link, as a fallback for a lack of playlist flag
-    return 1 = single track
-    return 2 = playlist
-    '''
-    #Fix a missing https://
-    soundcloudUrl = soundcloudUrl.replace("http://", "https://")
-
-    #Fix URL if it is a single track out of a playlist
-    if '?in=' in soundcloudUrl:
-        soundcloudUrl = soundcloudUrl.split('?in=')
-        soundcloudUrl = soundcloudUrl[0]
-
-    #URL is a playlist
-    if '/sets' in soundcloudUrl:
-        return 2, soundcloudUrl
-
-    #URL for tracks of a user
-    userReTracks1 = re.compile(r"^https:\/\/soundcloud.com\/[abcdefghijklmnopqrstuvwxyz\-_1234567890]{1,}$")
-    userReTracks2 = re.compile(r"^https:\/\/soundcloud.com\/[abcdefghijklmnopqrstuvwxyz\-_1234567890]{1,25}\/tracks$")
-
-    if (userReTracks1.match(soundcloudUrl)) or (userReTracks2.match(soundcloudUrl)):
-        return 3, soundcloudUrl
-
-    #URL for likes of a user
-    userReLikes = re.compile(r"^https:\/\/soundcloud.com\/[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\-_1234567890]{1,}\/likes$")
-    if (userReLikes.match(soundcloudUrl)):
-        return 4, soundcloudUrl
-
-    #This is a single track
-    else:
-        return 1, soundcloudUrl
 
 def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
     '''
@@ -383,7 +348,6 @@ def downloadPremium(trackId):
     hacky solution will continue to work. Probably until I cancel
     my SoundCloud Go Plus subscription (or rather trial)
     '''
-    #print("downloadPremium() Directory: {}".format(os.getcwd()))
     log_debug(">> downloadPremium()")
     while True:
         try:
@@ -405,17 +369,9 @@ def downloadPremium(trackId):
             break
         else:
             time.sleep(2)
-    #print("did we make it?")
-    #print(r.text)
-    #with open(str(trackId) + ".txt", "w") as file:
-    #    file.write(r.text)
-    #print("did???")
-
-    #file = codecs.open(str(trackId) + ".txt",'r', encoding='UTF-8')
-    #data = json.loads(file.readlines()[0])
     data = json.loads(r.text)
     url = data[0]['media']['transcodings'][0]['url']
-    #print(url)
+
     '''
     In the words of Dillon Francis' alter ego DJ Hanzel: "van deeper"
     That link to the hls stream leads to yet another link, which
@@ -440,13 +396,7 @@ def downloadPremium(trackId):
             break
         else:
             time.sleep(2)
-    #print(r.content)
-    #with open(str(trackId) + ".txt", "w") as file:
-    #    file.write(r.text)
 
-    #with open(str(trackId) + ".txt") as f:
-    #    data = json.loads(f.read())
-    #    url = data['url']
     data = json.loads(r.text)
     url = data['url']
     log_debug(f"URL: {url}")
@@ -480,7 +430,7 @@ def downloadPremium(trackId):
 
 def downloadSegment(segment_urls, i, trackId, correctDirectory):
     '''
-    This function randomly changed directories without telling it to,
+    This function randomly changes directories without telling it to,
     please don't ask me why. This fixes that.
     '''
     if (os.getcwd() != correctDirectory):
@@ -824,127 +774,8 @@ def addTags(filename, trackName, artist, album, coverFlag, description, m4aFlag)
                 )
             audio.save(v2_version=3)
 
-def downloadPlaylist(soundcloudUrl, hqFlag):
-    log_debug(f">> downloadPlaylist(soundcloudUrl = {soundcloudUrl}, hqFlag = {hqFlag})")
-    playlistId = getPlaylistId(soundcloudUrl)
-    print("Playlist ID: {}".format(playlistId))
-    permalinkUrl, trackId, trackName, album, trackCount = getPlaylistTracks(playlistId)
-    if descriptionDisableFlag == 0:
-        description = getPlaylistDescriptions(playlistId)
-    else:
-        description = ""
-
-    changeDirectory(album)
-    
-    if not os.path.exists(lastTrackIndexFilePath):
-        lastTrackIndexFile = open(lastTrackIndexFilePath, 'w+')
-        lastTrackIndex = 0
-        lastTrackIndexFile.write(str(lastTrackIndex))
-    else:
-        lastTrackIndexFile = open(lastTrackIndexFilePath, 'r')
-        lastTrackIndex = int(lastTrackIndexFile.read())
-    
-    for index in range(lastTrackIndex, trackCount):
-        downloadSingleTrack(permalinkUrl[index], trackName[index], hqFlag, album)
-        lastTrackIndexFile = open(lastTrackIndexFilePath, 'w')
-        lastTrackIndexFile.write(str(index))
-        lastTrackIndexFile.close()
-    log_debug("Download of playlist finished, deleting last_track_index.txt ...")
-    os.remove("last_track_index.txt")
-
-def getPlaylistId(soundcloudUrl):
-    '''
-    The name says it all, that's really all there is to it.
-    '''
-    log_debug(f">> getPlaylistId(soundcloudUrl = {soundcloudUrl})")
-    playlistIdRequest = requests.get("https://api-mobi.soundcloud.com/resolve?permalink_url={}&client_id={}&format=json&app_version={}".format(soundcloudUrl, clientId, appVersion)).content
-    log_debug(f"URL: {playlistIdRequest.url}")
-    log_debug(f"Status code: {playlistIdRequest.status_code}")
-    playlistIdRequest = json.loads(playlistIdRequest)
-    log_debug("Playlist ID: {}".format(playlistIdRequest["id"]))
-    return playlistIdRequest["id"]
-
-def getPlaylistTracks(playlistId):
-    '''
-    Gets the links to all the tracks in a playlist together with their
-    names as well as their IDs, all of which are necessary to download
-    the track seamlessly.
-    '''
-    log_debug(f">> getPlaylistTracks(playlistId = {playlistId})")
-    playlistUrls = requests.get("http://api.soundcloud.com/playlists/{}?client_id={}".format(playlistId, clientId))
-    log_debug(f"Playlist URL: {playlistUrls.url}")
-    log_debug(f"Status code: {playlistUrls.status_code}")
-    permalinkUrls = json.loads(playlistUrls.content)
-    album = permalinkUrls["title"]
-    print(f"Album: {album}")
-    permalinkUrl = []
-    trackId = []
-    trackTitle = []
-    trackCount = int(permalinkUrls["track_count"])
-    log_debug(f"trackCount = {trackCount}")
-
-    for i in range(trackCount):
-        try:
-            permalinkUrl.append(i)
-            trackId.append(i)
-            trackTitle.append(i)
-            permalinkUrl[i] = permalinkUrls["tracks"][i]["permalink_url"]
-            trackId[i] = permalinkUrls["tracks"][i]["id"]
-            trackTitle[i] = permalinkUrls["tracks"][i]["title"]
-        except IndexError:
-            missingTracks = trackCount - i
-            print(f"Sorry, {str(missingTracks)} of the tracks in this playlist are not available",
-                "in your country and can therefore not be downloaded.",
-                "Please use a VPN.")
-            trackCount = i
-            break
-
-    return permalinkUrl, trackId, trackTitle, album, trackCount    
-
-def getPlaylistDescriptions(playlistId):
-    '''
-    Get individual descriptions for all the track in a playlist.
-    I have yet to figure out why the getTags function refuses
-    to pass the description string as an argument but this 
-    seprate function works just fine for the time being. Sure,
-    it's not efficient but one more API request on top of countless
-    other ones won't hurt.
-    '''
-    log_debug(f">> getPlaylistDescriptions(playlistId = {playlistId})")
-    playlistUrls = requests.get("http://api.soundcloud.com/playlists/{}?client_id={}".format(playlistId, clientId))
-    log_debug(f"Playlist URL: {playlistUrls.url}")
-    log_debug(f"Status code: {playlistUrls.status_code}")
-    permalinkUrls = json.loads(playlistUrls.content)
-    description = []
-
-    log_debug("Number of tracks: {}".format(int(permalinkUrls["track_count"])))
-    for i in range(int(permalinkUrls["track_count"])):
-        try:
-            description.append(i)
-            description[i] = permalinkUrls["tracks"][i]["description"]
-        except IndexError:
-            log_debug(f"Error on description (index {i}")
-            log_debug("Setting description to empty string")
-            description[i] = ""
-
-    return description
-
 def parseStuff():
-    '''
-    Checks for two arguments, --pl for a playlist link and
-    -p for the m4a download. If the playlist flag isn't present
-    it just uses a simple regex as a fallback. If the premium flag
-    isn't present scdl will simply download the 128kbps MP3 available
-    for everyone else that isn't a SCG+ subscriber.
-    '''
-    
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-pl','--playlist',
-        help="Download a playlist instead of a single track",
-        action="store_true",
-        dest="playlistFlag",
-        )
     parser.add_argument(
         '-m','--metadata',
         help="Write track metadata to a separate file",
@@ -958,12 +789,6 @@ def parseStuff():
         dest="descriptionFlag"
         )
     parser.add_argument(
-        '-r', '--resume',
-        help="Resume download of playlist",
-        action="store_true",
-        dest="resumeDownloadFlag"
-        )
-    parser.add_argument(
         '--debug',
         help="Show output for debugging",
         action="store_true",
@@ -973,7 +798,7 @@ def parseStuff():
         '-s', '--segments',
         help="Set number of segments that will be downloaded in parallel (default = 16)",
         action="store",
-        dest="segmentsParallel"
+        dest="SEGMENTS"
         )
 
     args = parser.parse_args()
@@ -996,26 +821,13 @@ def parseStuff():
     else:
         metadataFlag = False
 
-    global playlistFlag
-    if args.playlistFlag is True:
-        playlistFlag = True
-    if args.playlistFlag is False:
-        playlistFlag = False
-
     global segmentsParallel
-    if args.segmentsParallel:
-        segmentsParallel = args.segmentsParallel
-
-    global resumeDownloadFlag
-    if args.resumeDownloadFlag is True:
-        resumeDownloadFlag = True
-    else:
-        resumeDownloadFlag = False
+    if args.SEGMENTS:
+        segmentsParallel = args.SEGMENTS
 
     log_debug(f"debugFlag = {debugFlag}")
     log_debug(f"descriptionDisableFlag = {descriptionDisableFlag}")
     log_debug(f"metadataFlag =  {metadataFlag}")
-    log_debug(f"playlistFlag = {playlistFlag}")
     log_debug(f"segmentsParallel = {segmentsParallel}")
 
 def get_user_id(profile_url):
@@ -1035,8 +847,6 @@ def get_tracks_account_rec(resolve_url):
     r = r.content
     x = json.loads(r)
     songs = []
-    #print(x)
-    #print(json.dumps(x, indent=4))
     try:
         for i in x["posts"]["collection"]:
             try:
@@ -1137,7 +947,6 @@ def main():
         for i in links:
             if i not in downloaded_links:
                 try:
-                    #time.sleep(2)
                     download(i)
                     downloaded_links.append(i)
                     with open('downloaded_links.json', 'w') as links_txt:
