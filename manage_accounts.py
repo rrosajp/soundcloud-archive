@@ -73,12 +73,16 @@ if len(sys.argv) == 2:
 				add_account(txt)
 
 	elif sys.argv[1] == "1":
+		exisiting_account_urls = []
+		for a in data['accounts']:
+			exisiting_account_urls.append(a['account'])
 		profile_link = input("Please enter an account URL: ")
 		accounts = get_followed_accounts(get_user_id(profile_link))
 		for index, a in enumerate(accounts):
 			print("\033[K", "Account: [{}/{}]".format(index + 1, len(accounts)), "\r", end='')
 			sys.stdout.flush()
-			add_account(a)
+			if a not in exisiting_account_urls:
+				add_account(a)
 		print("")
 	else:
 		print("You need to enter either 1 or 0...")
