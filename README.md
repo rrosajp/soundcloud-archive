@@ -1,5 +1,6 @@
 # soundcloud-archive - mass-download songs from SoundCloud
 You can either add single accounts or add every account followed by a particular user. It downloads 256kbps M4A files (those only accessible to SoundCloud Go+ subscribers) and falls back on the regular 128kbps MP3 files when it has to. Audio files are tagged with title, artist, description and cover art.
+This script is meant to be run 24/7. Often times tracks get deleted shortly after being uploaded, so this tool goes through the list of accounts, checks for songs it hasn't already downloaded. Inbetween checks there's a 60 second break. You can also add new accounts as the script is running using manage_accounts.py
 
 ## Installation
 Linux:
