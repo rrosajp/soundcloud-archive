@@ -365,12 +365,14 @@ def downloadPremium(trackId):
         except Exception as e:
             print(e)
         log_debug("Status Code: {}".format(r.status_code))
+        log_debug("Response: {}".format(r.text))
         if r.status_code == 200:
             break
         else:
             time.sleep(2)
     data = json.loads(r.text)
-    url = data[0]['media']['transcodings'][0]['url']
+    transcoding_index = 0
+    url = data[0]['media']['transcodings'][transcoding_index]['url']
 
     '''
     In the words of Dillon Francis' alter ego DJ Hanzel: "van deeper"
@@ -401,6 +403,11 @@ def downloadPremium(trackId):
     url = data['url']
     log_debug(f"URL: {url}")
 
+    if transcoding_index == 1 or transcoding_index == 3:
+        log_debug("Attempting to download progressive version...")
+        urllib.request.urlretrieve(url, "{}.m4a".format(trackId))
+        return
+
     '''
     Yet another really hacky solution, gets the .m3u8 file using curl,
     it basically only replicates excactly what a browser would do (go
@@ -420,9 +427,15 @@ def downloadPremium(trackId):
                 })
         except Exception as e:
             print(e)
+        log_debug("URL: {}".format(url))
         log_debug("Status Code: {}".format(r.status_code))
+        log_debug("Response: {}".format(r.text))
         if r.status_code == 200:
             break
+        if r.status_code == 500:
+            log_debug("Got 500 Server-side error, trying next m3u8 playlist...")
+            transcoding_index += 1
+            url = data[0]['media'][transcoding_index]['url']
         else:
             time.sleep(2)
 
