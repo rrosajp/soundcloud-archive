@@ -68,6 +68,71 @@ def removeReadonly(func, path, _):
     os.chmod(path, stat.S_IWRITE)
     func(path)
 
+def downloadEmbeddedFreeDownload(trackId):
+    #print("Trying")
+    while True:
+        try:
+            r = requests.get("https://api-v2.soundcloud.com/tracks?ids={}&client_id={}&%5Bobject%20Object%5D=&app_version={}&app_locale=de".format(str(trackId), premiumClientId, appVersion),
+                headers={
+                "Sec-Fetch-Mode":"cors",
+                "Origin": "https://soundcloud.com",
+                "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/javascript, */*; q=0.1",
+                "Referer": "https://soundcloud.com/",
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
+                "DNT": "1",
+                })
+        except Exception as e:
+            print(e)
+        #print("Status Code: {}".format(r.status_code))
+        #print("Response: {}".format(r.text))
+        if r.status_code == 200:
+            break
+        else:
+            time.sleep(2)
+    data = json.loads(r.text)
+    print(r.text)
+
+    if data[0]['downloadable'] == True:
+        print("This track has the free download enabled!")
+        if data[0]['has_downloads_left'] == False:
+            print("The download has a restricted number of downloads, not available anymore :(")
+            raise Exception("No free download available!")
+        if data[0]['has_downloads_left'] == True:
+            url = f"https://api-v2.soundcloud.com/tracks/{trackId}/download?client_id={clientId}&app_version={appVersion}&app_locale=de"
+            while True:
+                try:
+                    '''
+                    r = requests.get(data[0]['download_url'],
+                    headers={
+                    "Sec-Fetch-Mode":"cors",
+                    "Origin": "https://soundcloud.com",
+                    "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/javascript, */*; q=0.1",
+                    "Referer": "https://soundcloud.com/",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
+                    "DNT": "1",
+                    })
+                    print(r.content)
+                    '''
+                    r = requests.get(url)
+                    x = json.loads(r.content)
+                    print(x)
+                    r = requests.head(x['redirectUri'])
+                    filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
+                    print("Filename: {}".format(filename))
+                    print(x)
+                    urllib.request.urlretrieve(x['redirectUri'], filename)
+
+                    break
+                except Exception as e:
+                    print(e)
+                    time.sleep(2)
+    else:
+        raise Exception("No free download available!")
+
 def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
     '''
     If you're downloading a playlist a string containing the playlist
@@ -81,9 +146,16 @@ def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
         album = optionalAlbum
     else:
         album = "SoundCloud"
+
     '''
     m4a premium download, only happens when both flags are set
     '''
+    trackId = getTrackId(soundcloudUrl)
+    try:
+        downloadEmbeddedFreeDownload(trackId)
+        return
+    except:
+        log_debug("No free download available!")
 
     if premiumFlag == 1 and hqFlag == 1:
         trackId = getTrackId(soundcloudUrl)
