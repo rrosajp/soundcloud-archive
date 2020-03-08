@@ -450,7 +450,6 @@ def downloadPremium(trackId):
     That link to the hls stream leads to yet another link, which
     contains yet another link, which contains...
     '''
-
     while True:
         try:   
             r = requests.get(url,
@@ -464,9 +463,15 @@ def downloadPremium(trackId):
                 })
         except Exception as e:
             print(e)
+        log_debug("URL: {}".format(url))
         log_debug("Status Code: {}".format(r.status_code))
+        log_debug("Response: {}".format(r.text))
         if r.status_code == 200:
             break
+        if r.status_code == 500:
+            log_debug("Got 500 Server-side error, trying next m3u8 playlist...")
+            transcoding_index += 1
+            url = data[0]['media'][transcoding_index]['url']
         else:
             time.sleep(2)
 
@@ -498,15 +503,9 @@ def downloadPremium(trackId):
                 })
         except Exception as e:
             print(e)
-        log_debug("URL: {}".format(url))
         log_debug("Status Code: {}".format(r.status_code))
-        log_debug("Response: {}".format(r.text))
         if r.status_code == 200:
             break
-        if r.status_code == 500:
-            log_debug("Got 500 Server-side error, trying next m3u8 playlist...")
-            transcoding_index += 1
-            url = data[0]['media'][transcoding_index]['url']
         else:
             time.sleep(2)
 
