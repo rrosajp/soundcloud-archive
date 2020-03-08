@@ -158,7 +158,6 @@ def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
         log_debug("No free download available!")
 
     if premiumFlag == 1 and hqFlag == 1:
-        trackId = getTrackId(soundcloudUrl)
         size = 0
         m4aFailedFlag = 0
         if resumeDownloadFlag == True:
