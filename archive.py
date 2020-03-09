@@ -16,6 +16,7 @@ import platform
 import tempfile
 import subprocess
 from mutagen.mp3 import EasyMP3
+from urllib.parse import unquote
 from mutagen.easyid3 import EasyID3
 from joblib import Parallel, delayed
 from mutagen.mp4 import MP4, MP4Cover
@@ -109,12 +110,24 @@ def downloadEmbeddedFreeDownload(trackId):
                     log_debug("Status code: {}".format(r.status_code))
                     log_debug("Content: {}".format(r.content))
                     x = json.loads(r.content)
-                    r = requests.head(x['redirectUri'])
-                    filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
-                    filename.replace("%20", " ")
+                    r = requests.head(x['redirectUri'],
+                        headers={
+                        "Sec-Fetch-Mode":"cors",
+                        "Origin": "https://soundcloud.com",
+                        "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/javascript, */*; q=0.1",
+                        "Referer": "https://soundcloud.com/",
+                        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
+                        "DNT": "1",
+                        })
+                    try:
+                        filename = r.headers['x-amz-meta-original-filename']
+                    except:
+                        filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
+                        filename = unquote(filename)
                     print("Filename: {}".format(filename))
                     urllib.request.urlretrieve(x['redirectUri'], filename)
-
                     break
                 except Exception as e:
                     print(e)
@@ -286,7 +299,6 @@ def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
             '''
             addTags(finishedDownloadFilename, trackName, artist, album, coverFlag, description, 0)
 
-    
     cleanUp(trackId, repairFilename(trackTitle))
 
 def repairFilename(trackName):
