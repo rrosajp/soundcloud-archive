@@ -139,7 +139,11 @@ def downloadSingleTrack(soundcloudUrl, trackTitle, hqFlag, optionalAlbum):
     '''
     m4a premium download, only happens when both flags are set
     '''
+    log_debug("Getting Track ID for {}".format(soundcloudUrl))
     trackId = getTrackId(soundcloudUrl)
+    if trackId == 0:
+        print("Cannot download this track, skipping it!")
+        return
     try:
         downloadEmbeddedFreeDownload(trackId)
         return
@@ -392,9 +396,18 @@ def getTrackId(soundcloudUrl):
             resolveUrl = "https://api.soundcloud.com/resolve.json?url="
             url = str(resolveUrl) + str(soundcloudUrl) + str("&client_id=") + str(clientId)
             s = requests.get(url)
+            log_debug(s.status_code)
+            if(s.status_code == 404):
+                log_debug("Resolving URL returned 404 Not Found, skipping this track!")
+                return 0
+            log_debug(s.content)
             s = s.content
             trackId = json.loads(s)
+            if trackId["duration"] == 0:
+                print("Duration = 0")
+                return 0
             trackId = trackId["id"]
+            log_debug("Track ID: {}".format(trackId))
             return trackId
         except:
             time.sleep(2)
