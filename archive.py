@@ -1041,8 +1041,11 @@ def main():
         
         Parallel(n_jobs=16, backend="threading")(delayed(check_account)(accounts['accounts'], i) for i in range(len(accounts['accounts'])))
 
-        for i in links:
-            if i not in downloaded_links:
+        # Sets are so much faster than lists for searching through them. This used to take like two minutes lol
+        set_links = set(links)
+        set_downloaded_links = set(downloaded_links)
+        for i in set_links:
+            if i not in set_downloaded_links:
                 try:
                     download(i)
                     downloaded_links.append(i)
