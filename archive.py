@@ -1040,6 +1040,7 @@ def main():
         print("Number of accounts: {}".format(len(accounts['accounts'])))
         
         Parallel(n_jobs=16, backend="threading")(delayed(check_account)(accounts['accounts'], i) for i in range(len(accounts['accounts'])))
+        print("\nWent through all the accounts!")
 
         # Sets are so much faster than lists for searching through them. This used to take like two minutes lol
         set_links = set(links)
@@ -1054,7 +1055,7 @@ def main():
                 except:
                     print("Couldn't download {}".format(i))
                 gc.collect()
-
+        print("Nothing to download anymore...")
         time.sleep(60)
 
 if __name__ == '__main__':
