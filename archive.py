@@ -128,14 +128,17 @@ def downloadEmbeddedFreeDownload(trackId):
                             filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
                             filename = unquote(filename)
                         except:
-                            filename = repairFilename(data[0]['title']) + "." + (filename.split('.'))[-1]
+                            try:
+                                filename = repairFilename(data[0]['title']) + "." + (filename.split('.'))[-1]
+                            except:
+                                log_debug("File has no extension, adding .unknown to the end of the file...")
+                                filename = repairFilename(data[0]['title']) + ".unknown"
                     print("Filename: {}".format(filename))
                     try:
                         urllib.request.urlretrieve(x['redirectUri'], filename)
                         break
                     except:
-                        urllib.request.urlretrieve(x['redirectUri'], repairFilename(data[0]['title']) + "." + (filename.split('.'))[-1])
-                        break
+                        log_debug("An error occured while downloading the file, trying again...")
 
                 except Exception as e:
                     print(e)
