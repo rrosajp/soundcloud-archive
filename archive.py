@@ -124,8 +124,11 @@ def downloadEmbeddedFreeDownload(trackId):
                     try:
                         filename = r.headers['x-amz-meta-original-filename']
                     except:
-                        filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
-                        filename = unquote(filename)
+                        try:
+                            filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
+                            filename = unquote(filename)
+                        except:
+                            filename = repairFilename(data[0]['title']) + "." + (filename.split('.'))[-1]
                     print("Filename: {}".format(filename))
                     try:
                         urllib.request.urlretrieve(x['redirectUri'], filename)
