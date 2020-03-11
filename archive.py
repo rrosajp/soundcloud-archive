@@ -127,8 +127,13 @@ def downloadEmbeddedFreeDownload(trackId):
                         filename = re.findall("filename=\"(.+)\"", r.headers['content-disposition'])[0]
                         filename = unquote(filename)
                     print("Filename: {}".format(filename))
-                    urllib.request.urlretrieve(x['redirectUri'], filename)
-                    break
+                    try:
+                        urllib.request.urlretrieve(x['redirectUri'], filename)
+                        break
+                    except:
+                        urllib.request.urlretrieve(x['redirectUri'], repairFilename(data[0]['title']) + "." + (filename.split('.'))[-1])
+                        break
+
                 except Exception as e:
                     print(e)
                     time.sleep(2)
@@ -412,6 +417,9 @@ def getTrackId(soundcloudUrl):
             if(s.status_code == 404):
                 log_debug("Resolving URL returned 404 Not Found, skipping this track!")
                 return 0
+            if(s.status_code == 403):
+                log_debug("Track not available! (Country?)")
+                return 0
             log_debug(s.content)
             s = s.content
             trackId = json.loads(s)
@@ -457,6 +465,9 @@ def downloadPremium(trackId):
             time.sleep(2)
     data = json.loads(r.text)
     transcoding_index = 0
+    if(data[0]['media']['transcodings'] == []):
+        print("No audio streams available!")
+        return -1
     url = data[0]['media']['transcodings'][transcoding_index]['url']
 
     '''
@@ -496,7 +507,7 @@ def downloadPremium(trackId):
     if transcoding_index == 1 or transcoding_index == 3:
         log_debug("Attempting to download progressive version...")
         urllib.request.urlretrieve(url, "{}.m4a".format(trackId))
-        return
+        return 0
 
     '''
     Yet another really hacky solution, gets the .m3u8 file using curl,
@@ -524,6 +535,7 @@ def downloadPremium(trackId):
             time.sleep(2)
 
     downloadM3U8(trackId, r.text)
+    return 0
 
 def downloadSegment(segment_urls, i, trackId, correctDirectory):
     '''
@@ -536,12 +548,17 @@ def downloadSegment(segment_urls, i, trackId, correctDirectory):
     if platform.system() == 'Linux':
         print("\033[K\r", "Segment: [{} / {}]".format(i + 1, len(segment_urls)), "\r", end='')
 
+    if platform.system() == 'Windows':
+        print("\r Segment: [{} / {}]".format(i + 1, len(segment_urls)), "\r", end='')
     while True:
         try:
             urllib.request.urlretrieve(segment_urls[i], "{}-{}.m4a".format(trackId, i))
             break
-        except Exception as e:
-            print(e)
+        except:
+            print("An error occured while downloading segment {}! Trying again...".format(i + 1), "\nCheck your connection or try running scdl with fewer segments in parallel (see --help)")
+            if os.path.exists("{}-{}.m4a".format(trackId, i)):
+                log_debug("Deleting failed file: {}-{}.m4a".format(trackId, i))
+                os.remove("{}-{}.m4a".format(trackId, i))
             time.sleep(2)
 
 def downloadM3U8(trackId, m3u8_file):
@@ -594,52 +611,56 @@ def downloadPremiumPrivate(trackId, soundcloudUrl):
                 })
         except Exception as e:
             print(e)
-
         log_debug("Status Code: {}".format(r.status_code))
+        log_debug("Response: {}".format(r.content))
         if r.status_code == 200:
             break
         else:
             time.sleep(2)
 
-    with open(str(trackId) + ".txt", 'w+') as file:
-        file.write(r.text)
-
-
-    file = codecs.open(str(trackId) + ".txt",'r', encoding='UTF-8')
-    data = json.loads(file.readlines()[0])
+    data = json.loads(r.text)
+    log_debug("Loaded JSON data...")
+    transcoding_index = 0
     url = data['media']['transcodings'][0]['url']
-    log_debug(f"URL: {url}")
+
     '''
     In the words of Dillon Francis' alter ego DJ Hanzel: "van deeper"
     That link to the hls stream leads to yet another link, which
     contains yet another link, which contains...
     '''
     while True:
-        try:
+        try:   
             r = requests.get(url,
                 headers={
-                "Sec-Fetch-Mode": "cors",
-                "Referer": "https://soundcloud.com/",
-                "Origin": "https://soundcloud.com",
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
-                "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
-                "DNT": "1",
+                    "Sec-Fetch-Mode": "cors",
+                    "Referer": "https://soundcloud.com/",
+                    "Origin": "https://soundcloud.com",
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
+                    "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
+                    "DNT": "1",
                 })
         except Exception as e:
             print(e)
-
+        log_debug("URL: {}".format(url))
         log_debug("Status Code: {}".format(r.status_code))
+        log_debug("Response: {}".format(r.text))
         if r.status_code == 200:
             break
+        if r.status_code == 500:
+            log_debug("Got 500 Server-side error, trying next m3u8 playlist...")
+            transcoding_index += 1
+            url = data[0]['media'][transcoding_index]['url']
         else:
             time.sleep(2)
 
-    with open(str(trackId) + ".txt", "w") as file:
-        file.write(r.text)
+    data = json.loads(r.text)
+    url = data['url']
+    log_debug(f"URL: {url}")
 
-    with open(str(trackId) + ".txt") as f:
-        data = json.loads(f.read())
-        url = data['url']
+    if transcoding_index == 1 or transcoding_index == 3:
+        log_debug("Attempting to download progressive version...")
+        urllib.request.urlretrieve(url, "{}.m4a".format(trackId))
+        return
 
     '''
     Yet another really hacky solution, gets the .m3u8 file using curl,
@@ -651,7 +672,7 @@ def downloadPremiumPrivate(trackId, soundcloudUrl):
             r = requests.get(url,
                 headers={
                 "Sec-Fetch-Mode": "cors",
-                "Referer": "https://soundcloud.com/",
+                "Referer": "https://soundcloud.com",
                 "Origin": "https://soundcloud.com",
                 "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.90 Safari/537.36",
                 "Authorization": "OAuth 2-290697-69920468-HvgOO5GJcVtYD39",
@@ -663,52 +684,10 @@ def downloadPremiumPrivate(trackId, soundcloudUrl):
         if r.status_code == 200:
             break
         else:
-            sleep(2)
+            time.sleep(2)
 
-    print(r.text)
-    with open(str(trackId) + ".m3u8", "w") as file:
-        file.write(r.text)
 
-    downloadM3U8(trackId)
-
-def downloadRegular(trackId, soundcloudUrl):
-    resolveRegularPrivateUrl = "https://api-mobi.soundcloud.com/resolve?permalink_url=" + soundcloudUrl + "&client_id=" + clientId + "&format=json&app_version=" + appVersion
-    regularPrivateUrl = requests.get(resolveRegularPrivateUrl)
-    regularPrivateUrl = regularPrivateUrl.content
-    regularPrivateUrl = json.loads(regularPrivateUrl)
-    privateMp3Url = regularPrivateUrl["media"]["transcodings"][0]["url"]
-    privateMp3Url = privateMp3Url.replace("https://api-mobi.soundcloud.com","https://api-v2.soundcloud.com")
-    privateMp3Url = requests.get(privateMp3Url + "?client_id=" + clientId)
-    privateMp3Url = privateMp3Url.content
-    privateMp3UrlJson = json.loads(privateMp3Url)
-    privateMp3Url = privateMp3UrlJson["url"]
-    filename = str(trackId) + ".m3u8"
-    urllib.request.urlretrieve(privateMp3Url, filename)
-
-    os.system("{} -y -protocol_whitelist file,http,https,tcp,tls -i {}.m3u8 -c copy {}.mp3 -loglevel panic".format(ffmpegPath, trackId, trackId))
-
-def downloadRegularPrivate(trackId, soundcloudUrl):
-    resolveRegularPrivateUrl = "https://api-mobi.soundcloud.com/resolve?permalink_url=" + soundcloudUrl + "&client_id=" + clientId + "&format=json&app_version=" + appVersion
-    regularPrivateUrl = requests.get(resolveRegularPrivateUrl)
-    regularPrivateUrl = regularPrivateUrl.content
-    regularPrivateUrl = json.loads(regularPrivateUrl)
-    try:
-        privateMp3Url = regularPrivateUrl["media"]["transcodings"][0]["url"]
-        privateMp3Url = privateMp3Url.replace("https://api-mobi.soundcloud.com","https://api-v2.soundcloud.com")
-        privateMp3Url = requests.get(privateMp3Url + "?client_id=" + clientId)
-        privateMp3Url = privateMp3Url.content
-        privateMp3UrlJson = json.loads(privateMp3Url)
-        privateMp3Url = privateMp3UrlJson["url"]
-    except:
-        privateMp3Url = regularPrivateUrl["media"]["transcodings"][0]["url"] +  "&client_id=" + clientId
-        privateMp3Url = privateMp3Url.replace("https://api-mobi.soundcloud.com","https://api-v2.soundcloud.com")
-        privateMp3Url = requests.get(privateMp3Url)
-        privateMp3Url = privateMp3Url.content
-        privateMp3UrlJson = json.loads(privateMp3Url)
-        privateMp3Url = privateMp3UrlJson["url"]
-    urllib.request.urlretrieve(privateMp3Url, str(trackId) + ".m3u8")
-
-    os.system("{} -y -protocol_whitelist file,http,https,tcp,tls -i {}.m3u8 -c copy {}.mp3 -loglevel panic".format(ffmpegPath, trackId, trackId))
+    downloadM3U8(trackId, r.text)
 
 def getTags(soundcloudUrl):
     '''
@@ -797,10 +776,13 @@ def getDescription(soundcloudUrl):
     a = requests.get("https://api.soundcloud.com/resolve.json?url=" + soundcloudUrl + "&client_id=" + clientId)
     log_debug(f"URL: {a.url}")
     log_debug(f"Status code: {a.status_code}")
-    a = a.content
-    tags = json.loads(a)
-    description = tags["description"]
-    log_debug("Got description!")
+    a = a.text
+    try:
+        tags = json.loads(a)
+        description = tags["description"]
+        log_debug("Got description!")
+    except:
+        description = ""
     return description
 
 def addTags(filename, trackName, artist, album, coverFlag, description, m4aFlag):
@@ -832,13 +814,21 @@ def addTags(filename, trackName, artist, album, coverFlag, description, m4aFlag)
                 ]
             tags.save(filename)
         except Exception as e:
+            log_debug("Nevermind...")
             os.rename(filename, filename[:-4] + ".mp3")
             filename = filename[:-4] + ".mp3"
             m4aFlag = 0
 
     if m4aFlag == 0:
         log_debug("Tagging .mp3...")
-        audio = EasyMP3(filename)
+        try:
+            audio = EasyMP3(filename)
+        except:
+            print("Something went wrong while tagging the file!")
+            print("Neither M4A or MP3 worked, so I can only assume that the file is corrupt in some way")
+            print("Please check the file using MediaInfo, VLC, mpv, spek and/or Mp3tag for erros.")
+            print("There's nothing I can do about this :(")
+            return
         audio['title'] = trackName
         audio['artist'] = artist
 
